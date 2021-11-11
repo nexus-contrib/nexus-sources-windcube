@@ -20,7 +20,7 @@ namespace Nexus.Sources.WindCube.Tests
             var dataSource = new WindCubeDataSource() as IDataSource;
 
             var context = new DataSourceContext(
-                ResourceLocator: new Uri("DATABASE", UriKind.Relative),
+                ResourceLocator: new Uri("Database", UriKind.Relative),
                 Configuration: new Dictionary<string, string>(),
                 Logger: NullLogger.Instance);
 
@@ -55,7 +55,7 @@ namespace Nexus.Sources.WindCube.Tests
             var dataSource = new WindCubeDataSource() as IDataSource;
 
             var context = new DataSourceContext(
-                ResourceLocator: new Uri("DATABASE", UriKind.Relative),
+                ResourceLocator: new Uri("Database", UriKind.Relative),
                 Configuration: new Dictionary<string, string>(),
                 Logger: NullLogger.Instance);
 
@@ -92,7 +92,7 @@ namespace Nexus.Sources.WindCube.Tests
             var dataSource = new WindCubeDataSource() as IDataSource;
 
             var context = new DataSourceContext(
-                ResourceLocator: new Uri("DATABASE", UriKind.Relative),
+                ResourceLocator: new Uri("Database", UriKind.Relative),
                 Configuration: new Dictionary<string, string>(),
                 Logger: NullLogger.Instance);
 
