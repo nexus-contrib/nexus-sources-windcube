@@ -12,7 +12,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Nexus.Sources.WindCube
+namespace Nexus.Sources
 {
     [ExtensionDescription("Provides access to databases with WindCube files.")]
     public class WindCube : StructuredFileDataSource
