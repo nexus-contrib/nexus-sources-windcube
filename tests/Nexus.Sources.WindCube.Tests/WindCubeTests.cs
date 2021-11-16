@@ -11,13 +11,13 @@ using Xunit;
 
 namespace Nexus.Sources.WindCube.Tests
 {
-    public class WindCubeDataSourceTests
+    public class WindCubeTests
     {
         [Fact]
         public async Task ProvidesCatalog()
         {
             // arrange
-            var dataSource = new WindCubeDataSource() as IDataSource;
+            var dataSource = new WindCube() as IDataSource;
 
             var context = new DataSourceContext(
                 ResourceLocator: new Uri("Database", UriKind.Relative),
@@ -52,7 +52,7 @@ namespace Nexus.Sources.WindCube.Tests
         public async Task ProvidesDataAvailability()
         {
             // arrange
-            var dataSource = new WindCubeDataSource() as IDataSource;
+            var dataSource = new WindCube() as IDataSource;
 
             var context = new DataSourceContext(
                 ResourceLocator: new Uri("Database", UriKind.Relative),
@@ -89,7 +89,7 @@ namespace Nexus.Sources.WindCube.Tests
         public async Task CanReadFullDay()
         {
             // arrange
-            var dataSource = new WindCubeDataSource() as IDataSource;
+            var dataSource = new WindCube() as IDataSource;
 
             var context = new DataSourceContext(
                 ResourceLocator: new Uri("Database", UriKind.Relative),
