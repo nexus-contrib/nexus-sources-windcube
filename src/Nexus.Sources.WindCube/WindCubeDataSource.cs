@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace Nexus.Sources.WindCube
 {
-    [ExtensionIdentification("WindCube", "Wind Cube", "Provides access to databases with WindCube files.")]
+    [ExtensionDescription("Provides access to databases with WindCube files.")]
     public class WindCubeDataSource : StructuredFileDataSource
     {
         #region Fields
