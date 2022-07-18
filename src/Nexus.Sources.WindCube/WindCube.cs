@@ -159,6 +159,10 @@ namespace Nexus.Sources
                 var baseUnit = TimeSpan.FromMinutes(10);
                 var lines = File.ReadAllLines(info.FilePath);
                 var headerSize = int.Parse(Regex.Match(lines.First(), "[0-9]+").Value);
+
+                if (lines.Length <= headerSize + 1)
+                    continue;
+
                 var headline = lines[headerSize + 1];
 
                 var column = headline
