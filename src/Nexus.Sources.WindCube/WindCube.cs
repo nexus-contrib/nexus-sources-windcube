@@ -14,21 +14,26 @@ using System.Threading.Tasks;
 
 namespace Nexus.Sources
 {
-    [ExtensionDescription("Provides access to databases with WindCube files.")]
+    [ExtensionDescription(
+        "Provides access to databases with WindCube files.",
+        "https://github.com/Apollo3zehn/nexus-sources-windcube",
+        "https://github.com/Apollo3zehn/nexus-sources-windcube")]
     public class WindCube : StructuredFileDataSource
     {
         #region Fields
 
         private string _inFileDateFormat = "yyyy/MM/dd HH:mm";
         private Encoding _encoding;
-        private Dictionary<string, CatalogDescription> _config = null!;
+        private Dictionary<string, CatalogDescription> _config = default!;
         private NumberFormatInfo _nfi;
 
         #endregion
 
         #region Properties
 
-        private DataSourceContext Context { get; set; } = null!;
+        private DataSourceContext Context { get; set; } = default!;
+
+        private ILogger Logger { get; set; } = default!;
 
         #endregion
 
@@ -49,9 +54,10 @@ namespace Nexus.Sources
 
         #region Methods
 
-        protected override async Task SetContextAsync(DataSourceContext context, CancellationToken cancellationToken)
+        protected override async Task SetContextAsync(DataSourceContext context, ILogger logger, CancellationToken cancellationToken)
         {
             this.Context = context;
+            this.Logger = logger;
 
             var configFilePath = Path.Combine(this.Root, "config.json");
 
@@ -77,8 +83,10 @@ namespace Nexus.Sources
                     if (properties is null)
                         throw new ArgumentNullException(nameof(properties));
 
+                    var fileSourceName = properties.Value.GetProperty("FileSource").GetString();
+
                     return allFileSources[catalogItem.Catalog.Id]
-                        .First(fileSource => ((ExtendedFileSource)fileSource).Name == properties["FileSource"]);
+                        .First(fileSource => ((ExtendedFileSource)fileSource).Name == fileSourceName);
                 });
 
             return Task.FromResult(fileSourceProvider);
@@ -87,7 +95,7 @@ namespace Nexus.Sources
         protected override Task<CatalogRegistration[]> GetCatalogRegistrationsAsync(string path, CancellationToken cancellationToken)
         {
             if (path == "/")
-                return Task.FromResult(_config.Keys.Select(catalogId => new CatalogRegistration(catalogId)).ToArray());
+                return Task.FromResult(_config.Select(entry => new CatalogRegistration(entry.Key, entry.Value.Title)).ToArray());
 
             else
                 return Task.FromResult(new CatalogRegistration[0]);
@@ -129,7 +137,7 @@ namespace Nexus.Sources
                         .AddResources(resources)
                         .Build();
 
-                    catalog = catalog.Merge(newCatalog, MergeMode.NewWins);
+                    catalog = catalog.Merge(newCatalog);
                 }
             }
 
@@ -197,7 +205,7 @@ namespace Nexus.Sources
                 }
                 else
                 {
-                    this.Context.Logger.LogDebug("Could not find representation {ResourcePath}", info.CatalogItem.ToPath());
+                    this.Logger.LogDebug("Could not find representation {ResourcePath}", info.CatalogItem.ToPath());
                 }
             });
         }
