@@ -123,7 +123,7 @@ namespace Nexus.Sources
                     using var wcFile = new StreamReader(File.OpenRead(filePath), _encoding);
                     ReadHeader(wcFile);
 
-                    var resources = GetResources(wcFile, fileSourceId, fileSource);
+                    var resources = GetResources(wcFile, fileSourceId);
 
                     var newCatalog = new ResourceCatalogBuilder(id: catalogId)
                         .AddResources(resources)
@@ -220,7 +220,7 @@ namespace Nexus.Sources
             }
         }
 
-        private List<Resource> GetResources(StreamReader wcFile, string fileSourceId, FileSource fileSource)
+        private List<Resource> GetResources(StreamReader wcFile, string fileSourceId)
         {
             var line = wcFile.ReadLine();
 
