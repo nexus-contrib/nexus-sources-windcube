@@ -35,14 +35,6 @@ namespace Nexus.Sources
 
         #endregion
 
-        #region Properties
-
-        private DataSourceContext Context { get; set; } = default!;
-
-        private ILogger Logger { get; set; } = default!;
-
-        #endregion
-
         #region Constructors
 
         public WindCube()
@@ -60,11 +52,8 @@ namespace Nexus.Sources
 
         #region Methods
 
-        protected override async Task SetContextAsync(DataSourceContext context, ILogger logger, CancellationToken cancellationToken)
+        protected override async Task InitializeAsync(CancellationToken cancellationToken)
         {
-            Context = context;
-            Logger = logger;
-
             var configFilePath = Path.Combine(Root, "config.json");
 
             if (!File.Exists(configFilePath))
