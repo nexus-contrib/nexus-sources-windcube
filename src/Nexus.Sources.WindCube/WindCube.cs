@@ -98,7 +98,6 @@ namespace Nexus.Sources
             foreach (var (fileSourceId, fileSource) in catalogDescription.FileSources)
             {
                 var filePaths = default(string[]);
-
                 var catalogSourceFiles = fileSource.AdditionalProperties.GetStringArray("CatalogSourceFiles");
 
                 if (catalogSourceFiles is not null)
