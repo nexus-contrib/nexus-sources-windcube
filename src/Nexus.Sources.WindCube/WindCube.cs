@@ -139,7 +139,7 @@ namespace Nexus.Sources
             {
                 // read data
                 var baseUnit = TimeSpan.FromMinutes(10);
-                var lines = File.ReadAllLines(info.FilePath);
+                var lines = File.ReadAllLines(info.FilePath, _encoding);
                 var headerSize = int.Parse(Regex.Match(lines.First(), "[0-9]+").Value);
 
                 if (lines.Length <= headerSize + 1)
@@ -152,9 +152,8 @@ namespace Nexus.Sources
 
                 var column = headline
                     .Split('\t')
-                    .Select(rawName => TryEnforceNamingConvention("WC_" + rawName, out var resourceId) ? resourceId : string.Empty)
                     .ToList()
-                    .FindIndex(value => value.StartsWith(info.CatalogItem.Resource.Id));
+                    .FindIndex(value => value == info.OriginalName);
 
                 if (column > -1)
                 {
@@ -211,8 +210,8 @@ namespace Nexus.Sources
 
             var resources = line.Split('\t')
                 .Skip(1)
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Select(value =>
+                .Where(originalName => !string.IsNullOrWhiteSpace(originalName))
+                .Select(originalName =>
                 {
                     var samplePeriod = TimeSpan.FromMinutes(10);
 
@@ -220,15 +219,15 @@ namespace Nexus.Sources
                         dataType: NexusDataType.FLOAT64,
                         samplePeriod: samplePeriod);
 
-                    var match = Regex.Match(value, @"(.*)\s\((.*)\)");
-                    var rawName = match.Success ? match.Groups[1].Value : value;
+                    var match = Regex.Match(originalName, @"(.*)\s\((.*)\)");
+                    var rawName = match.Success ? match.Groups[1].Value : originalName;
 
                     if (!TryEnforceNamingConvention("WC_" + rawName, out var resourceId))
                         throw new Exception($"The name {"WC_" + rawName} is not a valid resource id.");
 
                     var unit = match.Success ? match.Groups[2].Value : string.Empty;
 
-                    var groupMatch = Regex.Match(value, "([0-9]+m)");
+                    var groupMatch = Regex.Match(originalName, "([0-9]+m)");
                     var group = default(string);
 
                     if (groupMatch.Success)
@@ -240,7 +239,8 @@ namespace Nexus.Sources
                     var resource = new ResourceBuilder(id: resourceId)
                         .WithUnit(unit)
                         .WithGroups(group)
-                        .WithProperty(StructuredFileDataSource.FileSourceKey, fileSourceId)
+                        .WithFileSourceId(fileSourceId)
+                        .WithOriginalName(originalName)
                         .AddRepresentation(representation)
                         .Build();
 
