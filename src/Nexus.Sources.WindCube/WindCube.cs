@@ -1,11 +1,11 @@
-﻿using Microsoft.Extensions.Logging;
-using Nexus.DataModel;
-using Nexus.Extensibility;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
+using Nexus.DataModel;
+using Nexus.Extensibility;
 
 namespace Nexus.Sources
 {
@@ -13,19 +13,19 @@ namespace Nexus.Sources
         "Provides access to databases with WindCube files.",
         "https://github.com/Apollo3zehn/nexus-sources-windcube",
         "https://github.com/Apollo3zehn/nexus-sources-windcube")]
-    public class WindCube : StructuredFileDataSource
+    public partial class WindCube : StructuredFileDataSource
     {
         record CatalogDescription(
             string Title,
-            Dictionary<string, FileSource> FileSources, 
+            Dictionary<string, IReadOnlyList<FileSource>> FileSourceGroups, 
             JsonElement? AdditionalProperties);
             
         #region Fields
 
-        private string _inFileDateFormat = "yyyy/MM/dd HH:mm";
-        private Encoding _encoding;
+        private readonly string _inFileDateFormat = "yyyy/MM/dd HH:mm";
+        private readonly Encoding _encoding;
+        private readonly NumberFormatInfo _nfi;
         private Dictionary<string, CatalogDescription> _config = default!;
-        private NumberFormatInfo _nfi;
 
         #endregion
 
@@ -57,11 +57,11 @@ namespace Nexus.Sources
             _config = JsonSerializer.Deserialize<Dictionary<string, CatalogDescription>>(jsonString) ?? throw new Exception("config is null");            
         }
 
-        protected override Task<Func<string, Dictionary<string, FileSource>>> GetFileSourceProviderAsync(
+        protected override Task<Func<string, Dictionary<string, IReadOnlyList<FileSource>>>> GetFileSourceProviderAsync(
             CancellationToken cancellationToken)
         {
-            return Task.FromResult<Func<string, Dictionary<string, FileSource>>>(
-                catalogId => _config[catalogId].FileSources);
+            return Task.FromResult<Func<string, Dictionary<string, IReadOnlyList<FileSource>>>>(
+                catalogId => _config[catalogId].FileSourceGroups);
         }
 
         protected override Task<CatalogRegistration[]> GetCatalogRegistrationsAsync(string path, CancellationToken cancellationToken)
@@ -70,7 +70,7 @@ namespace Nexus.Sources
                 return Task.FromResult(_config.Select(entry => new CatalogRegistration(entry.Key, entry.Value.Title)).ToArray());
 
             else
-                return Task.FromResult(new CatalogRegistration[0]);
+                return Task.FromResult(Array.Empty<CatalogRegistration>());
         }
 
         protected override Task<ResourceCatalog> GetCatalogAsync(string catalogId, CancellationToken cancellationToken)
@@ -78,40 +78,44 @@ namespace Nexus.Sources
             var catalogDescription = _config[catalogId];
             var catalog = new ResourceCatalog(id: catalogId);
 
-            foreach (var (fileSourceId, fileSource) in catalogDescription.FileSources)
+            foreach (var (fileSourceId, fileSourceGroup) in catalogDescription.FileSourceGroups)
             {
-                var filePaths = default(string[]);
-                var catalogSourceFiles = fileSource.AdditionalProperties?.GetStringArray("CatalogSourceFiles");
-
-                if (catalogSourceFiles is not null)
+                foreach (var fileSource in fileSourceGroup)
                 {
-                    filePaths = catalogSourceFiles
-                        .Where(filePath => filePath is not null)
-                        .Select(filePath => Path.Combine(Root, filePath!))
-                        .ToArray();
-                }
-                else
-                {
-                    if (!TryGetFirstFile(fileSource, out var filePath))
-                        continue;
+                    var filePaths = default(string[]);
+                    var catalogSourceFiles = fileSource.AdditionalProperties?.GetStringArray("CatalogSourceFiles");
 
-                    filePaths = new[] { filePath };
-                }
+                    if (catalogSourceFiles is not null)
+                    {
+                        filePaths = catalogSourceFiles
+                            .Where(filePath => filePath is not null)
+                            .Select(filePath => Path.Combine(Root, filePath!))
+                            .ToArray();
+                    }
 
-                cancellationToken.ThrowIfCancellationRequested();
+                    else
+                    {
+                        if (!TryGetFirstFile(fileSource, out var filePath))
+                            continue;
 
-                foreach (var filePath in filePaths)
-                {
-                    using var wcFile = new StreamReader(File.OpenRead(filePath), _encoding);
-                    ReadHeader(wcFile);
+                        filePaths = new[] { filePath };
+                    }
 
-                    var resources = GetResources(wcFile, fileSourceId);
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                    var newCatalog = new ResourceCatalogBuilder(id: catalogId)
-                        .AddResources(resources)
-                        .Build();
+                    foreach (var filePath in filePaths)
+                    {
+                        using var wcFile = new StreamReader(File.OpenRead(filePath), _encoding);
+                        ReadHeader(wcFile);
 
-                    catalog = catalog.Merge(newCatalog);
+                        var resources = GetResources(wcFile, fileSourceId);
+
+                        var newCatalog = new ResourceCatalogBuilder(id: catalogId)
+                            .AddResources(resources)
+                            .Build();
+
+                        catalog = catalog.Merge(newCatalog);
+                    }
                 }
             }
 
@@ -122,11 +126,11 @@ namespace Nexus.Sources
         {
             var rowCount = 0;
             var lines = File.ReadAllLines(filePath);
-            var headerSize = int.Parse(Regex.Match(lines.First(), "[0-9]+").Value);
+            var headerSize = int.Parse(HeaderSizeRegex().Match(lines.First()).Value);
 
             foreach (var line in lines.Skip(headerSize + 2))
             {
-                if (DateTime.TryParseExact(line.Substring(0, 16), _inFileDateFormat, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dateTime))
+                if (DateTime.TryParseExact(line[..16], _inFileDateFormat, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dateTime))
                     rowCount++;
             }
 
@@ -140,11 +144,11 @@ namespace Nexus.Sources
                 // read data
                 var baseUnit = TimeSpan.FromMinutes(10);
                 var lines = File.ReadAllLines(info.FilePath, _encoding);
-                var headerSize = int.Parse(Regex.Match(lines.First(), "[0-9]+").Value);
+                var headerSize = int.Parse(HeaderSizeRegex().Match(lines.First()).Value);
 
                 if (lines.Length <= headerSize + 1)
                 {
-                    this.Logger.LogDebug("The content of file {FilePath} is invalid", info.FilePath);
+                    Logger.LogDebug("The content of file {FilePath} is invalid", info.FilePath);
                     return;
                 }
 
@@ -159,7 +163,7 @@ namespace Nexus.Sources
                 {
                     foreach (var line in lines.Skip(headerSize + 2))
                     {
-                        if (DateTime.TryParseExact(line.Substring(0, 16), _inFileDateFormat, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var rowTimeStamp))
+                        if (DateTime.TryParseExact(line[..16], _inFileDateFormat, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var rowTimeStamp))
                         {
                             rowTimeStamp = rowTimeStamp.AddMinutes(-10).ToUniversalTime();
 
@@ -170,7 +174,7 @@ namespace Nexus.Sources
 
                             var rawValue = line.Split('\t')[column];
                             var value = double.Parse(rawValue, _nfi);
-                            var destination = info.Data.Slice(index * info.CatalogItem.Representation.ElementSize);
+                            var destination = info.Data[(index * info.CatalogItem.Representation.ElementSize)..];
 
                             BitConverter.GetBytes(value)
                                 .CopyTo(destination);
@@ -183,17 +187,17 @@ namespace Nexus.Sources
                 {
                     Logger.LogDebug("Could not find representation {ResourcePath}", info.CatalogItem.ToPath());
                 }
-            });
+            }, cancellationToken);
         }
 
-        private void ReadHeader(StreamReader wcFile)
+        private static void ReadHeader(StreamReader wcFile)
         {
             var firstLine = wcFile.ReadLine();
 
             if (firstLine is null)
                 throw new Exception("first line is null");
 
-            var headerSize = int.Parse(Regex.Match(firstLine, "[0-9]+").Value);
+            var headerSize = int.Parse(HeaderSizeRegex().Match(firstLine).Value);
 
             for (int i = 0; i < headerSize; i++)
             {
@@ -201,7 +205,7 @@ namespace Nexus.Sources
             }
         }
 
-        private List<Resource> GetResources(StreamReader wcFile, string fileSourceId)
+        private static List<Resource> GetResources(StreamReader wcFile, string fileSourceId)
         {
             var line = wcFile.ReadLine();
 
@@ -250,7 +254,7 @@ namespace Nexus.Sources
             return resources;
         }
 
-        private bool TryEnforceNamingConvention(string resourceId, [NotNullWhen(returnValue: true)] out string newResourceId)
+        private static bool TryEnforceNamingConvention(string resourceId, [NotNullWhen(returnValue: true)] out string newResourceId)
         {
             newResourceId = resourceId;
             newResourceId = Resource.InvalidIdCharsExpression.Replace(newResourceId, "_");
@@ -258,6 +262,9 @@ namespace Nexus.Sources
 
             return Resource.ValidIdExpression.IsMatch(newResourceId);
         }
+
+        [GeneratedRegex("[0-9]+")]
+        private static partial Regex HeaderSizeRegex();
 
         #endregion
     }

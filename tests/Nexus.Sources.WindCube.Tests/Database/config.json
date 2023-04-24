@@ -1,7 +1,7 @@
 {
   "/A/B/C": {
-    "FileSources": {
-      "default": {
+    "FileSourceGroups": {
+      "default": [{
         "PathSegments": [
           "'DATA'",
           "yyyy-MM"
@@ -9,7 +9,7 @@
         "FileTemplate": "'abc_'yyyy_MM_dd__HH_mm_ss'.sta'",
         "FilePeriod": "1.00:00:00",
         "UtcOffset": "00:10:00"
-      }
+      }]
     }
   }
 }
