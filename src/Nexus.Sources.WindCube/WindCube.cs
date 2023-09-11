@@ -137,57 +137,113 @@ namespace Nexus.Sources
             return Task.FromResult(rowCount / 144.0);
         }
 
-        protected override Task ReadSingleAsync(ReadInfo info, CancellationToken cancellationToken)
+        protected override Task ReadAsync(ReadInfo info, StructuredFileReadRequest[] readRequests, CancellationToken cancellationToken)
         {
             return Task.Run(() =>
             {
-                // read data
-                var baseUnit = TimeSpan.FromMinutes(10);
-                var lines = File.ReadAllLines(info.FilePath, _encoding);
-                var headerSize = int.Parse(HeaderSizeRegex().Match(lines.First()).Value);
-
-                if (lines.Length <= headerSize + 1)
+                foreach (var readRequest in readRequests)
                 {
-                    Logger.LogDebug("The content of file {FilePath} is invalid", info.FilePath);
-                    return;
-                }
+                    // read data
+                    var baseUnit = TimeSpan.FromMinutes(10);
+                    var lines = File.ReadAllLines(info.FilePath, _encoding);
+                    var headerSize = int.Parse(HeaderSizeRegex().Match(lines.First()).Value);
 
-                var headline = lines[headerSize + 1];
-
-                var column = headline
-                    .Split('\t')
-                    .ToList()
-                    .FindIndex(value => value == info.OriginalName);
-
-                if (column > -1)
-                {
-                    foreach (var line in lines.Skip(headerSize + 2))
+                    if (lines.Length <= headerSize + 1)
                     {
-                        if (DateTime.TryParseExact(line[..16], _inFileDateFormat, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var rowTimeStamp))
+                        Logger.LogDebug("The content of file {FilePath} is invalid", info.FilePath);
+                        return;
+                    }
+
+                    var headline = lines[headerSize + 1];
+
+                    var column = headline
+                        .Split('\t')
+                        .ToList()
+                        .FindIndex(value => value == readRequest.OriginalName);
+
+                    if (column > -1)
+                    {
+                        foreach (var line in lines.Skip(headerSize + 2))
                         {
-                            rowTimeStamp = rowTimeStamp.AddMinutes(-10).ToUniversalTime();
+                            if (DateTime.TryParseExact(line[..16], _inFileDateFormat, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var rowTimeStamp))
+                            {
+                                rowTimeStamp = rowTimeStamp.AddMinutes(-10).ToUniversalTime();
 
-                            var index = (int)Math.Floor((rowTimeStamp - info.FileBegin).Ticks / (double)baseUnit.Ticks);
+                                var index = (int)Math.Floor((rowTimeStamp - info.FileBegin).Ticks / (double)baseUnit.Ticks);
 
-                            if (index < 0 || index >= info.Data.Length)
-                                continue;
+                                if (index < 0 || index >= readRequest.Data.Length)
+                                    continue;
 
-                            var rawValue = line.Split('\t')[column];
-                            var value = double.Parse(rawValue, _nfi);
-                            var destination = info.Data[(index * info.CatalogItem.Representation.ElementSize)..];
+                                var rawValue = line.Split('\t')[column];
+                                var value = double.Parse(rawValue, _nfi);
+                                var destination = readRequest.Data[(index * readRequest.CatalogItem.Representation.ElementSize)..];
 
-                            BitConverter.GetBytes(value)
-                                .CopyTo(destination);
+                                BitConverter.GetBytes(value)
+                                    .CopyTo(destination);
 
-                            info.Status.Span[index] = 1;
+                                readRequest.Status.Span[index] = 1;
+                            }
                         }
                     }
-                }
-                else
-                {
-                    Logger.LogDebug("Could not find representation {ResourcePath}", info.CatalogItem.ToPath());
+                    else
+                    {
+                        Logger.LogDebug("Could not find representation {ResourcePath}", readRequest.CatalogItem.ToPath());
+                    }   
                 }
             }, cancellationToken);
+        }
+
+        protected override Task<(DateTime, string[])> FindFileBeginAndPathsAsync(DateTime begin, FileSource fileSource)
+        {
+            var localBegin = begin.Kind == DateTimeKind.Utc
+                ? DateTime.SpecifyKind(begin.Add(fileSource.UtcOffset), DateTimeKind.Local)
+                : throw new ArgumentException("The begin parameter must of kind UTC.");
+
+            // fileNameOffset is required because file start times are not aligned to multiples of the file period but offset by the UTC offset
+            var fileNameOffset = fileSource.UtcOffset;
+            var localFileBegin = (localBegin - fileNameOffset).RoundDown(fileSource.FilePeriod) + fileNameOffset;
+
+            var folderNames = fileSource
+                .PathSegments
+                .Select(localFileBegin.ToString);
+
+            var folderNameArray = new List<string>() { Root }
+                .Concat(folderNames)
+                .ToArray();
+
+            var folderPath = Path.Combine(folderNameArray);
+            var fileName = localFileBegin.ToString(fileSource.FileTemplate);
+
+            string[] filePaths;
+
+            if (fileName.Contains('?') || fileName.Contains('*') && Directory.Exists(folderPath))
+            {
+                filePaths = Directory
+                   .EnumerateFiles(folderPath, fileName)
+                   .ToArray();
+            }
+
+            else
+            {
+                filePaths = new string[] { Path.Combine(folderPath, fileName) };
+            }
+
+            var utcFileBegin = AdjustToUtc(localFileBegin, fileSource.UtcOffset);
+
+            return Task.FromResult((utcFileBegin, filePaths));
+        }
+
+        private static DateTime AdjustToUtc(DateTime dateTime, TimeSpan utcOffset)
+        {
+            var result = dateTime;
+
+            if (dateTime != DateTime.MinValue && dateTime != DateTime.MaxValue)
+            {
+                if (dateTime.Kind != DateTimeKind.Utc)
+                    result = DateTime.SpecifyKind(dateTime.Subtract(utcOffset), DateTimeKind.Utc);
+            }
+
+            return result;
         }
 
         private static void ReadHeader(StreamReader wcFile)
