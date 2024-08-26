@@ -1,3 +1,7 @@
+## v2.0.0-beta.27 - 2024-08-26
+
+- Follow Nexus.Sources.StructuredFile changes.
+
 ## v2.0.0-beta.26 - 2024-03-16
 
 - Follow Nexus changes.

@@ -169,7 +169,7 @@ public partial class WindCube : StructuredFileDataSource
                         {
                             rowTimeStamp = rowTimeStamp.AddMinutes(-10).ToUniversalTime();
 
-                            var index = (int)Math.Floor((rowTimeStamp - info.FileBegin).Ticks / (double)baseUnit.Ticks);
+                            var index = (int)Math.Floor((rowTimeStamp - info.RegularFileBegin).Ticks / (double)baseUnit.Ticks);
 
                             if (index < 0 || index >= readRequest.Data.Length)
                                 continue;
@@ -191,46 +191,6 @@ public partial class WindCube : StructuredFileDataSource
                 }
             }
         }, cancellationToken);
-    }
-
-    protected override Task<(DateTime, string[])> FindFileBeginAndPathsAsync(DateTime begin, FileSource fileSource)
-    {
-        var localBegin = begin.Kind == DateTimeKind.Utc
-            ? DateTime.SpecifyKind(begin.Add(fileSource.UtcOffset), DateTimeKind.Local)
-            : throw new ArgumentException("The begin parameter must of kind UTC.");
-
-        // fileNameOffset is required because file start times are not aligned to multiples of the file period but offset by the UTC offset
-        var fileNameOffset = fileSource.UtcOffset;
-        var localFileBegin = (localBegin - fileNameOffset).RoundDown(fileSource.FilePeriod) + fileNameOffset;
-
-        var folderNames = fileSource
-            .PathSegments
-            .Select(localFileBegin.ToString);
-
-        var folderNameArray = new List<string>() { Root }
-            .Concat(folderNames)
-            .ToArray();
-
-        var folderPath = Path.Combine(folderNameArray);
-        var fileName = localFileBegin.ToString(fileSource.FileTemplate);
-
-        string[] filePaths;
-
-        if (fileName.Contains('?') || fileName.Contains('*') && Directory.Exists(folderPath))
-        {
-            filePaths = Directory
-               .EnumerateFiles(folderPath, fileName)
-               .ToArray();
-        }
-
-        else
-        {
-            filePaths = [Path.Combine(folderPath, fileName)];
-        }
-
-        var utcFileBegin = AdjustToUtc(localFileBegin, fileSource.UtcOffset);
-
-        return Task.FromResult((utcFileBegin, filePaths));
     }
 
     private static DateTime AdjustToUtc(DateTime dateTime, TimeSpan utcOffset)
