@@ -193,19 +193,6 @@ public partial class WindCube : StructuredFileDataSource
         }, cancellationToken);
     }
 
-    private static DateTime AdjustToUtc(DateTime dateTime, TimeSpan utcOffset)
-    {
-        var result = dateTime;
-
-        if (dateTime != DateTime.MinValue && dateTime != DateTime.MaxValue)
-        {
-            if (dateTime.Kind != DateTimeKind.Utc)
-                result = DateTime.SpecifyKind(dateTime.Subtract(utcOffset), DateTimeKind.Utc);
-        }
-
-        return result;
-    }
-
     private static void ReadHeader(StreamReader wcFile)
     {
         var firstLine = wcFile.ReadLine() ?? throw new Exception("first line is null");
