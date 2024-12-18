@@ -20,10 +20,10 @@ public class WindCubeTests
             SourceConfiguration: default!,
             RequestConfiguration: default!);
 
-        await dataSource.SetContextAsync(context, NullLogger.Instance, CancellationToken.None);
+        await dataSource!.SetContextAsync(context, NullLogger.Instance, CancellationToken.None);
 
         // act
-        var actual = await dataSource.GetCatalogAsync("/A/B/C", CancellationToken.None);
+        var actual = await dataSource.EnrichCatalogAsync(new("/A/B/C"), CancellationToken.None);
         var actualIds = actual.Resources!.Skip(2).Take(2).Select(resource => resource.Id).ToList();
         var actualUnits = actual.Resources!.Skip(2).Take(2).Select(resource => resource.Properties?.GetStringValue("unit")).ToList();
         var actualGroups = actual.Resources!.Skip(2).Take(2).SelectMany(resource => resource.Properties?.GetStringArray("groups")!).ToList();
@@ -55,7 +55,7 @@ public class WindCubeTests
             SourceConfiguration: default!,
             RequestConfiguration: default!);
 
-        await dataSource.SetContextAsync(context, NullLogger.Instance, CancellationToken.None);
+        await dataSource!.SetContextAsync(context, NullLogger.Instance, CancellationToken.None);
 
         // act
         var actual = new Dictionary<DateTime, double>();
@@ -94,10 +94,10 @@ public class WindCubeTests
             SourceConfiguration: default!,
             RequestConfiguration: default!);
 
-        await dataSource.SetContextAsync(context, NullLogger.Instance, CancellationToken.None);
+        await dataSource!.SetContextAsync(context, NullLogger.Instance, CancellationToken.None);
 
         // act
-        var catalog = await dataSource.GetCatalogAsync("/A/B/C", CancellationToken.None);
+        var catalog = await dataSource.EnrichCatalogAsync(new("/A/B/C"), CancellationToken.None);
         var resource = catalog.Resources![0];
         var representation = resource.Representations![0];
         var catalogItem = new CatalogItem(catalog, resource, representation, default);
@@ -106,7 +106,7 @@ public class WindCubeTests
         var end = new DateTime(2020, 10, 09, 0, 0, 0, DateTimeKind.Utc);
         var (data, status) = ExtensibilityUtilities.CreateBuffers(representation, begin, end);
 
-        var result = new ReadRequest(catalogItem, data, status);
+        var result = new ReadRequest(resource.Id, catalogItem, data, status);
         await dataSource.ReadAsync(begin, end, [result], default!, new Progress<double>(), CancellationToken.None);
 
         // assert

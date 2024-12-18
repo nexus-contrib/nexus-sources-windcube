@@ -73,10 +73,9 @@ public partial class WindCube : StructuredFileDataSource
             return Task.FromResult(Array.Empty<CatalogRegistration>());
     }
 
-    protected override Task<ResourceCatalog> GetCatalogAsync(string catalogId, CancellationToken cancellationToken)
+    protected override Task<ResourceCatalog> EnrichCatalogAsync(ResourceCatalog catalog, CancellationToken cancellationToken)
     {
-        var catalogDescription = _config[catalogId];
-        var catalog = new ResourceCatalog(id: catalogId);
+        var catalogDescription = _config[catalog.Id];
 
         foreach (var (fileSourceId, fileSourceGroup) in catalogDescription.FileSourceGroups)
         {
@@ -110,7 +109,7 @@ public partial class WindCube : StructuredFileDataSource
 
                     var resources = GetResources(wcFile, fileSourceId);
 
-                    var newCatalog = new ResourceCatalogBuilder(id: catalogId)
+                    var newCatalog = new ResourceCatalogBuilder(id: catalog.Id)
                         .AddResources(resources)
                         .Build();
 
@@ -137,7 +136,7 @@ public partial class WindCube : StructuredFileDataSource
         return Task.FromResult(rowCount / 144.0);
     }
 
-    protected override Task ReadAsync(ReadInfo info, StructuredFileReadRequest[] readRequests, CancellationToken cancellationToken)
+    protected override Task ReadAsync(ReadInfo info, ReadRequest[] readRequests, CancellationToken cancellationToken)
     {
         return Task.Run(() =>
         {
@@ -159,7 +158,7 @@ public partial class WindCube : StructuredFileDataSource
                 var column = headline
                     .Split('\t')
                     .ToList()
-                    .FindIndex(value => value == readRequest.OriginalName);
+                    .FindIndex(value => value == readRequest.OriginalResourceName);
 
                 if (column > -1)
                 {
@@ -207,6 +206,7 @@ public partial class WindCube : StructuredFileDataSource
     private static List<Resource> GetResources(StreamReader wcFile, string fileSourceId)
     {
         var line = wcFile.ReadLine() ?? throw new Exception("line is null");
+        
         var resources = line.Split('\t')
             .Skip(1)
             .Where(originalName => !string.IsNullOrWhiteSpace(originalName))
