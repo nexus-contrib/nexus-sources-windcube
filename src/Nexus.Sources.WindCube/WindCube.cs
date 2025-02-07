@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Nexus.DataModel;
@@ -9,27 +8,35 @@ using Nexus.Extensibility;
 
 namespace Nexus.Sources;
 
+/// <summary>
+/// Additional extension-specific settings.
+/// </summary>
+/// <param name="TitleMap">The catalog ID to title map. Add an entry here to specify a custom catalog title.</param>
+public record WindCubeSettings(
+    Dictionary<string, string> TitleMap
+);
+
+/// <summary>
+/// Additional file source settings.
+/// </summary>
+/// <param name="CatalogSourceFiles">The source files to populate the catalog with resources.</param>
+public record WindCubeAdditionalFileSourceSettings(
+    string[]? CatalogSourceFiles
+);
+
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
+
 [ExtensionDescription(
     "Provides access to databases with WindCube files.",
     "https://github.com/Apollo3zehn/nexus-sources-windcube",
     "https://github.com/Apollo3zehn/nexus-sources-windcube")]
-public partial class WindCube : StructuredFileDataSource
+public partial class WindCube : StructuredFileDataSource<WindCubeSettings, WindCubeAdditionalFileSourceSettings>
 {
-    record CatalogDescription(
-        string Title,
-        Dictionary<string, IReadOnlyList<FileSource>> FileSourceGroups,
-        JsonElement? AdditionalProperties);
-
-    #region Fields
-
     private readonly string _inFileDateFormat = "yyyy/MM/dd HH:mm";
+
     private readonly Encoding _encoding;
+
     private readonly NumberFormatInfo _nfi;
-    private Dictionary<string, CatalogDescription> _config = default!;
-
-    #endregion
-
-    #region Constructors
 
     public WindCube()
     {
@@ -42,51 +49,45 @@ public partial class WindCube : StructuredFileDataSource
         _encoding = CodePagesEncodingProvider.Instance.GetEncoding(1252) ?? throw new Exception("encoding is null");
     }
 
-    #endregion
-
-    #region Methods
-
-    protected override async Task InitializeAsync(CancellationToken cancellationToken)
-    {
-        var configFilePath = Path.Combine(Root, "config.json");
-
-        if (!File.Exists(configFilePath))
-            throw new Exception($"Configuration file {configFilePath} not found.");
-
-        var jsonString = await File.ReadAllTextAsync(configFilePath, cancellationToken);
-        _config = JsonSerializer.Deserialize<Dictionary<string, CatalogDescription>>(jsonString) ?? throw new Exception("config is null");
-    }
-
-    protected override Task<Func<string, Dictionary<string, IReadOnlyList<FileSource>>>> GetFileSourceProviderAsync(
-        CancellationToken cancellationToken)
-    {
-        return Task.FromResult<Func<string, Dictionary<string, IReadOnlyList<FileSource>>>>(
-            catalogId => _config[catalogId].FileSourceGroups);
-    }
-
-    protected override Task<CatalogRegistration[]> GetCatalogRegistrationsAsync(string path, CancellationToken cancellationToken)
+    protected override Task<CatalogRegistration[]> GetCatalogRegistrationsAsync(
+        string path,
+        CancellationToken cancellationToken
+    )
     {
         if (path == "/")
-            return Task.FromResult(_config.Select(entry => new CatalogRegistration(entry.Key, entry.Value.Title)).ToArray());
+        {
+            return Task.FromResult(Context.SourceConfiguration.FileSourceGroupsMap
+                .Select(entry =>
+                    {
+                        Context.SourceConfiguration.AdditionalSettings.TitleMap.TryGetValue(entry.Key, out var title);
+                        return new CatalogRegistration(entry.Key, title);
+                    }
+                ).ToArray());
+        }
 
         else
+        {
             return Task.FromResult(Array.Empty<CatalogRegistration>());
+        }
     }
 
-    protected override Task<ResourceCatalog> EnrichCatalogAsync(ResourceCatalog catalog, CancellationToken cancellationToken)
+    protected override Task<ResourceCatalog> EnrichCatalogAsync(
+        ResourceCatalog catalog,
+        CancellationToken cancellationToken
+    )
     {
-        var catalogDescription = _config[catalog.Id];
+        var fileSourceGroupsMap = Context.SourceConfiguration.FileSourceGroupsMap[catalog.Id];
 
-        foreach (var (fileSourceId, fileSourceGroup) in catalogDescription.FileSourceGroups)
+        foreach (var (fileSourceId, fileSourceGroup) in fileSourceGroupsMap)
         {
             foreach (var fileSource in fileSourceGroup)
             {
+                var additionalSettings = fileSource.AdditionalSettings;
                 var filePaths = default(string[]);
-                var catalogSourceFiles = fileSource.AdditionalProperties?.GetStringArray("CatalogSourceFiles");
 
-                if (catalogSourceFiles is not null)
+                if (additionalSettings.CatalogSourceFiles is not null)
                 {
-                    filePaths = catalogSourceFiles
+                    filePaths = additionalSettings.CatalogSourceFiles
                         .Where(filePath => filePath is not null)
                         .Select(filePath => Path.Combine(Root, filePath!))
                         .ToArray();
@@ -121,7 +122,10 @@ public partial class WindCube : StructuredFileDataSource
         return Task.FromResult(catalog);
     }
 
-    protected override Task<double> GetFileAvailabilityAsync(string filePath, CancellationToken cancellationToken)
+    protected override Task<double> GetFileAvailabilityAsync(
+        string filePath,
+        CancellationToken cancellationToken
+    )
     {
         var rowCount = 0;
         var lines = File.ReadAllLines(filePath);
@@ -136,7 +140,11 @@ public partial class WindCube : StructuredFileDataSource
         return Task.FromResult(rowCount / 144.0);
     }
 
-    protected override Task ReadAsync(ReadInfo info, ReadRequest[] readRequests, CancellationToken cancellationToken)
+    protected override Task ReadAsync(
+        ReadInfo<WindCubeAdditionalFileSourceSettings> info,
+        ReadRequest[] readRequests,
+        CancellationToken cancellationToken
+    )
     {
         return Task.Run(() =>
         {
@@ -249,7 +257,10 @@ public partial class WindCube : StructuredFileDataSource
         return resources;
     }
 
-    private static bool TryEnforceNamingConvention(string resourceId, [NotNullWhen(returnValue: true)] out string newResourceId)
+    private static bool TryEnforceNamingConvention(
+        string resourceId,
+        [NotNullWhen(returnValue: true)] out string newResourceId
+    )
     {
         newResourceId = resourceId;
         newResourceId = Resource.InvalidIdCharsExpression.Replace(newResourceId, "_");
@@ -260,8 +271,9 @@ public partial class WindCube : StructuredFileDataSource
 
     [GeneratedRegex("[0-9]+")]
     private static partial Regex HeaderSizeRegex();
+
     [GeneratedRegex(@"(.*)\s\((.*)\)")]
     private static partial Regex MyRegex();
-
-    #endregion
 }
+
+#pragma warning restore CS1591 // Missing XML comment for publicly visible type or member

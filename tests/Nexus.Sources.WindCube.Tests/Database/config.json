@@ -1,15 +1,19 @@
 {
-  "/A/B/C": {
-    "FileSourceGroups": {
+  "fileSourceGroupsMap": {
+    "/A/B/C": {
       "default": [{
-        "PathSegments": [
+        "pathSegments": [
           "'DATA'",
           "yyyy-MM"
         ],
-        "FileTemplate": "'abc_'yyyy_MM_dd__HH_mm_ss'.sta'",
-        "FilePeriod": "1.00:00:00",
-        "FileNameOffset": "00:10:00"
+        "fileTemplate": "'abc_'yyyy_MM_dd__HH_mm_ss'.sta'",
+        "filePeriod": "1.00:00:00",
+        "fileNameOffset": "00:10:00",
+        "additionalSettings": {}
       }]
     }
+  },
+  "additionalSettings": {
+    "titleMap": {}
   }
 }
