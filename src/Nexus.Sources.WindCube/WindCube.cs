@@ -142,7 +142,7 @@ public partial class WindCube : StructuredFileDataSource<WindCubeSettings, WindC
 
     protected override Task ReadAsync(
         ReadInfo<WindCubeAdditionalFileSourceSettings> info,
-        ReadRequest[] readRequests,
+        StructuredFileReadRequest[] readRequests,
         CancellationToken cancellationToken
     )
     {
@@ -223,7 +223,7 @@ public partial class WindCube : StructuredFileDataSource<WindCubeSettings, WindC
                 var samplePeriod = TimeSpan.FromMinutes(10);
 
                 var representation = new Representation(
-                    dataType: NexusDataType.FLOAT64,
+                    dataType: NexusDataType.Float64,
                     samplePeriod: samplePeriod);
 
                 var match = MyRegex().Match(originalName);
@@ -246,9 +246,11 @@ public partial class WindCube : StructuredFileDataSource<WindCubeSettings, WindC
                 var resource = new ResourceBuilder(id: resourceId)
                     .WithUnit(unit)
                     .WithGroups(group)
-                    .WithFileSourceId(fileSourceId)
                     .WithOriginalName(originalName)
-                    .AddRepresentation(representation)
+                    .AddRepresentations(new Dictionary<Representation, string>
+                    {
+                        [representation] = fileSourceId
+                    })
                     .Build();
 
                 return resource;
