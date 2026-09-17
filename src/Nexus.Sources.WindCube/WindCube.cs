@@ -21,7 +21,7 @@ public record WindCubeSettings(
 /// </summary>
 /// <param name="CatalogSourceFiles">The source files to populate the catalog with resources.</param>
 public record WindCubeAdditionalFileSourceSettings(
-    string[]? CatalogSourceFiles
+    string[]? CatalogSourceFiles = default
 );
 
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
